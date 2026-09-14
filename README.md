@@ -1,5 +1,4 @@
-**end-to-end Kubernetes demo** 
-Use **Amazon EKS** because Karpenter is easiest to demonstrate there. Karpenter watches for unschedulable Pods and provisions compute capacity; KEDA handles workload/Pod scaling. ([Karpenter][1])
+# Kubernetes Cloud Native Tools
 
 ## 1. What each tool does
 
