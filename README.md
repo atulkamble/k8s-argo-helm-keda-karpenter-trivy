@@ -100,6 +100,58 @@ flowchart TB
 KEDA changes the number of application Pods. Karpenter adds EC2 nodes only
 when the cluster does not have enough capacity for pending Pods.
 
+### Helm architecture
+
+```mermaid
+flowchart LR
+      Values[values.yaml] --> Chart[Helm chart]
+      Chart --> Release[Helm release: webapp]
+      Release --> Kubernetes[Kubernetes API]
+      Kubernetes --> Workload[Deployment and Service]
+```
+
+### Argo CD architecture
+
+```mermaid
+flowchart LR
+      Git[Git repository] --> Application[Argo CD Application]
+      Application --> Compare[Compare desired and live state]
+      Compare --> Sync[Sync resources]
+      Sync --> Cluster[Kubernetes cluster]
+      Cluster -->|status| Application
+```
+
+### KEDA architecture
+
+```mermaid
+flowchart LR
+      Metrics[Metrics Server] --> Trigger[KEDA ScaledObject]
+      Trigger --> HPA[HorizontalPodAutoscaler]
+      HPA --> Pods[webapp Pods]
+      Pods --> Metrics
+```
+
+### Karpenter architecture
+
+```mermaid
+flowchart LR
+      Pending[Pending Pods] --> Controller[Karpenter controller]
+      Controller --> Pool[NodePool]
+      Pool --> Class[EC2NodeClass]
+      Class --> EC2[EC2 worker node]
+      EC2 --> Pending
+```
+
+### Trivy architecture
+
+```mermaid
+flowchart LR
+      Image[Nginx container image] --> Scanner[Trivy scanner]
+      Database[Vulnerability database] --> Scanner
+      Scanner --> Report[Severity and fix report]
+      Report --> Decision[Deploy or remediate]
+```
+
 Check your cluster:
 
 ```bash
