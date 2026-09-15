@@ -10,6 +10,24 @@ Basic examples for learning one tool at a time.
 | KEDA      | Scale application Pods       | [KEDA lesson](keda/README.md)           |
 | Karpenter | Add EC2 worker nodes         | [Karpenter lesson](karpenter/README.md) |
 
+## Quick comparison
+
+| Tool      | Short definition                      | Main use case                                |
+| --------- | ------------------------------------- | -------------------------------------------- |
+| Helm      | Kubernetes package manager            | Install and upgrade applications             |
+| Argo CD   | GitOps continuous delivery controller | Sync cluster state from Git                  |
+| KEDA      | Event-driven autoscaler               | Scale Pods from metrics or events            |
+| Karpenter | Kubernetes node provisioner           | Add worker nodes for pending Pods            |
+| Trivy     | Container security scanner            | Find image vulnerabilities before deployment |
+
+## Common use cases
+
+- Package and deploy applications with Helm.
+- Manage Kubernetes deployments declaratively with Argo CD and Git.
+- Scale workloads automatically with KEDA.
+- Provision right-sized EC2 worker nodes with Karpenter.
+- Scan container images for security vulnerabilities with Trivy.
+
 ## Folder structure
 
 ```text
@@ -46,6 +64,41 @@ Basic examples for learning one tool at a time.
 - A GitHub repository for the Argo CD lesson.
 - Metrics Server for KEDA CPU scaling.
 - EKS, an installed Karpenter controller, and its AWS permissions for node scaling.
+
+## Architecture diagrams
+
+### Deployment flow
+
+```mermaid
+flowchart LR
+      Dev[Developer] --> Git[GitHub repository]
+      Git --> Argo[Argo CD Application]
+      Argo --> Helm[Helm chart]
+      Helm --> Deploy[webapp Deployment]
+      Deploy --> Pods[Nginx Pods]
+      Pods --> Service[webapp Service]
+      Trivy[Trivy image scan] --> Git
+```
+
+Trivy checks the container image before the chart is deployed. Argo CD watches
+the Git repository and keeps the Kubernetes resources synchronized.
+
+### Scaling and node provisioning
+
+```mermaid
+flowchart TB
+      Load[Load generator] --> Metrics[CPU metrics]
+      Metrics --> KEDA[KEDA ScaledObject]
+      KEDA --> HPA[HorizontalPodAutoscaler]
+      HPA --> WebPods[webapp Pods]
+      WebPods -->|Pending Pods| Karpenter[Karpenter controller]
+      Karpenter --> NodePool[NodePool and EC2NodeClass]
+      NodePool --> Nodes[New EC2 worker nodes]
+      Nodes --> WebPods
+```
+
+KEDA changes the number of application Pods. Karpenter adds EC2 nodes only
+when the cluster does not have enough capacity for pending Pods.
 
 Check your cluster:
 
