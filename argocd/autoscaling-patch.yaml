@@ -1,0 +1,18 @@
+# Merge patch for Application/webapp; this is not a standalone resource.
+# kubectl patch application webapp -n argocd --type merge --patch-file argocd/autoscaling-patch.yaml
+spec:
+  source:
+    helm:
+      parameters:
+        - name: autoscaling.enabled
+          value: "true"
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: webapp
+      namespace: default
+      jsonPointers:
+        - /spec/replicas
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true

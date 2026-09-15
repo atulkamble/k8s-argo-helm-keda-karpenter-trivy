@@ -1,0 +1,6 @@
+apiVersion: v2
+name: webapp
+description: Nginx application for the Helm, Argo CD, KEDA and Karpenter demo
+type: application
+version: 0.1.0
+appVersion: "latest"

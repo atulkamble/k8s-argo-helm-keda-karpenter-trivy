@@ -1,0 +1,29 @@
+# Sends HTTP traffic to webapp for up to five minutes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: webapp-load
+  namespace: default
+spec:
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 60
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: load
+          image: busybox:1.37
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                wget -q -T 2 -O /dev/null http://webapp.default.svc.cluster.local/ || sleep 1
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 16Mi
+            limits:
+              cpu: 500m
+              memory: 64Mi

@@ -1,0 +1,22 @@
+replicaCount: 1
+
+image:
+  repository: nginx
+  tag: latest
+
+service:
+  type: LoadBalancer
+  port: 80
+
+# Required for KEDA's CPU utilization trigger.
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 128Mi
+
+# Set to true when using KEDA so it controls the replica count.
+autoscaling:
+  enabled: false
