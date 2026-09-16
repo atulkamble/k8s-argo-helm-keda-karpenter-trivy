@@ -152,4 +152,9 @@ Namespace: default
 
 11. click on CREATE
 
+12. Kill Process
+
+pkill -f "kubectl port-forward svc/argocd-server"
+
+eksctl delete cluster --name mycluster --region us-east-1
 ```
