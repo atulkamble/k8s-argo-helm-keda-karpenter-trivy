@@ -1,4 +1,4 @@
-# Argo CD — Very Basic Practice
+# Argo CD
 
 **Argo CD** is a GitOps Continuous Delivery tool for Kubernetes.
 
