@@ -158,3 +158,67 @@ pkill -f "kubectl port-forward svc/argocd-server"
 
 eksctl delete cluster --name mycluster --region us-east-1
 ```
+
+# KEDA 
+```
+eksctl create cluster --name mycluster --region us-east-1 --nodegroup-name mynodes --node-type t3.medium --nodes 2 --nodes-min 2 --nodes-max 2 --managed
+aws eks update-kubeconfig --name mycluster --region us-east-1
+kubectl get nodes                        
+kubectl get pods 
+kubectl get svc 
+kubectl get ns 
+choco install kubernetes-helm
+OR 
+winget install Helm.Helm
+helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+helm install keda kedacore/keda --namespace keda --create-namespace
+kubectl get ns 
+kubectl get pods -n keda
+
+git clone https://github.com/atulkamble/argocd-app
+cd argocd-app
+kubectl apply -f keda-deployment.yaml
+kubectl apply -f service.yaml
+kubectl apply -f scaledobject.yaml
+kubectl get pods
+kubectl get svc 
+kubectl get svc nginx-service
+
+http://a3e1bffec0d6f47e6becd9c4b6124a36-1184056075.us-east-1.elb.amazonaws.com/
+
+kubectl get scaledobject
+kubectl get hpa
+kubectl describe scaledobject nginx-scaledobject
+
+kubectl create ns argocd
+
+kubectl apply --server-side --force-conflicts -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+kubectl port-forward svc/argocd-server -n argocd 8080:443 > /tmp/argocd-port-forward.log 2>&1 &
+
+// App Deployment
+
+Application Name: nginx-app
+Project: default
+Repository URL: https://github.com/atulkamble/argocd-app
+Revision: main
+Path: .
+Cluster: https://kubernetes.default.svc
+Namespace: default
+
+kubectl top pods
+
+kubectl run load-generator --image=busybox:1.36 --restart=Never -- /bin/sh -c "while true; do wget -q -O- http://nginx-service; done"
+
+kubectl get pods
+kubectl top pods
+kubectl get hpa
+kubectl get scaledobject
+
+kubectl get hpa -w
+
+for i in {1..5}; do
+  kubectl run load-generator-$i --image=busybox:1.36 --restart=Never -- /bin/sh -c "while true; do wget -q -O- http://nginx-service; done"
+done
+```
