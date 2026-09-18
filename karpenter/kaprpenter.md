@@ -1,145 +1,267 @@
-## Karpenter — Very Basic Practice on Amazon EKS
+Since your **EKS cluster already exists**, skip EKS creation. This is a focused **Karpenter basic practice**. Current Karpenter uses `NodePool`, `EC2NodeClass`, and `NodeClaim`; it watches unschedulable Pods and provisions suitable EC2 capacity. ([Karpenter][1])
 
-Amazon Web Services **Karpenter** is a Kubernetes node autoscaler. It watches for **unschedulable Pods**, provisions suitable EC2 capacity, and can remove unnecessary nodes later.
+## Karpenter – Basic Practice on Existing EKS
 
-![Image](https://images.openai.com/static-rsc-4/c8n_10zr8cPOZn8HATG35KzVyQi8w-Tz18Br82uXhsT2VKVH-Vtfgy1yoY66E0Y46BHm_H_5JQ4Vso7VHAleO11vqpdP7gr14KkVA5TBr9fG94UeFBu-OMJMd7mSr5EixbKQJQC23cnX4FnY0_p2GI8rCoCN2fgs-SnX1JmIenkO0GPudi3fq7Wk_DAHPx6u?purpose=fullsize)
-
-![Image](https://images.openai.com/static-rsc-4/cHmIcSQi7sDt4a71MumBW2ZbKQ8ogW3RbNIaAVwqzWIcqvBcg30A3UPpL1A7iGdUuYs99GyfkyF38XPweJx7eWJSU6jsCFb_duDVbFWJL6Jw7BK1VcEGk0vGwy2-g99exyYhKHNvQP6cR-t0tt-88zp2in1M01s--UxngsYggnEUWatUqNv7ImyJasTQ5Dft?purpose=fullsize)
-
-![Image](https://images.openai.com/static-rsc-4/cVyVSh0whPT51197arEO9q0H0vEzkhEHhO3bM9E_vwcrPbyYR_orN2id4VBHr-76b1uISFwrOqI1ZdXEOBVHJfVPvKkbyU8ED5yg5m5EVItV7STeNknBRQBJu-YGydTBDm8UfCNXgdg6JXcZhf5z6vA9gvhmIN_N7Ho3o5tnubXv-SXGfpisbfMX0eEZdRb0?purpose=fullsize)
-
-![Image](https://images.openai.com/static-rsc-4/ri4aPXG6q1ANoB0bm3x2b12ohnphWz7pMCMS6YMqKNFq7Q9oURsZVn9-EP4ZOgqBdBr7vdUO0y-UPWsrPUsCEyn1ZzSplcnpZiWPpGMeduLs3WKzEud-lzdEbOzQgs5RbSUXmVcwpI4FG3yxK3Safu02AKVq4H_XNC5_rOgfCoWOZj6NoOWMIcsVHfvJTHrl?purpose=fullsize)
-
-### 1. Simple Architecture
+### Points to Remember
 
 ```text
-Developer
-    |
-    v
-Deployment
-    |
-    v
-Kubernetes Pods
-    |
-    | Pods cannot be scheduled
-    v
-Karpenter
-    |
-    v
-AWS EC2
-    |
-    v
-New Worker Node
-    |
-    v
-Pods Scheduled
+1. Karpenter is used for Kubernetes NODE autoscaling.
+
+2. HPA/KEDA → scale Pods.
+   Karpenter → provisions/removes Nodes.
+
+3. Karpenter watches for Pods that Kubernetes cannot schedule.
+
+4. When Pods become Pending because of insufficient resources,
+   Karpenter evaluates their requirements.
+
+5. Karpenter can automatically select suitable EC2 instance types.
+
+6. Important Karpenter resources:
+
+   NodePool
+      |
+      └── EC2NodeClass
+              |
+              └── NodeClaim
+                      |
+                      └── EC2 Instance / Kubernetes Node
+
+7. NodePool:
+   Defines what type of capacity Karpenter is allowed to provision.
+
+8. EC2NodeClass:
+   Defines AWS-specific configuration:
+   - AMI
+   - IAM role
+   - Subnets
+   - Security Groups
+
+9. NodeClaim:
+   Represents an individual capacity request/node created by Karpenter.
+
+10. Karpenter controller itself must run on existing stable capacity.
+    Do not depend on Karpenter to create the node required to run
+    the Karpenter controller.
+
+11. CPU/Memory requests are important.
+    Karpenter uses Pod scheduling requirements when selecting capacity.
+
+12. Karpenter can use:
+    - On-Demand
+    - Spot
+
+13. Node consolidation can remove unnecessary/underutilized nodes.
+
+14. At least one NodePool is required for Karpenter to provision nodes.
 ```
 
-### 2. Prerequisites
+The current Karpenter documentation confirms that a NodePool defines provisioning constraints and each AWS NodePool references an `EC2NodeClass`. ([Karpenter][2])
 
-For a basic lab:
+## Practice Flow
 
-```bash
-aws --version
-kubectl version --client
-eksctl version
-helm version
+```text
+Existing EKS Cluster
+        |
+        v
+Install Karpenter
+        |
+        v
+Create EC2NodeClass
+        |
+        v
+Create NodePool
+        |
+        v
+Deploy Test Application
+        |
+        v
+Increase Replicas
+        |
+        v
+Existing Nodes become full
+        |
+        v
+Pods become Pending
+        |
+        v
+Karpenter detects Pending Pods
+        |
+        v
+Creates NodeClaim
+        |
+        v
+Launches EC2 Instance
+        |
+        v
+Node joins EKS
+        |
+        v
+Pending Pods become Running
+        |
+        v
+Scale workload down
+        |
+        v
+Karpenter can consolidate capacity
 ```
 
-You need an EKS cluster and working `kubectl` access.
-
-For example:
+## Step 1 — Verify Existing EKS
 
 ```bash
-eksctl create cluster \
-  --name mycluster \
-  --region us-east-1 \
-  --nodegroup-name mynodes \
-  --node-type t3.medium \
-  --nodes 2 \
-  --managed
+kubectl get nodes
+
+kubectl get pods -A
+
+aws sts get-caller-identity
 ```
 
-Configure `kubectl`:
+Get cluster information:
 
 ```bash
-aws eks update-kubeconfig \
+aws eks describe-cluster \
   --name mycluster \
   --region us-east-1
+```
+
+Set variables:
+
+```bash
+export CLUSTER_NAME="mycluster"
+export AWS_DEFAULT_REGION="us-east-1"
+export AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+```
+
+Change `mycluster` and region if necessary.
+
+## Step 2 — Karpenter AWS Prerequisites
+
+For an **existing cluster**, Karpenter still needs AWS-side permissions/resources. The official bootstrap CloudFormation is specifically useful for setting up permissions needed when adding Karpenter to an existing cluster. ([Karpenter][3])
+
+Use the current Karpenter version rather than hard-coding an old release:
+
+```bash
+export KARPENTER_VERSION="<CURRENT_VERSION>"
+```
+
+[Karpenter installation documentation](https://karpenter.sh/docs/getting-started/?utm_source=chatgpt.com)
+
+Download the corresponding CloudFormation template:
+
+```bash
+curl -fsSL \
+https://raw.githubusercontent.com/aws/karpenter-provider-aws/v${KARPENTER_VERSION}/website/content/en/preview/getting-started/getting-started-with-karpenter/cloudformation.yaml \
+-o karpenter-cloudformation.yaml
+```
+
+Deploy:
+
+```bash
+aws cloudformation deploy \
+  --stack-name "Karpenter-${CLUSTER_NAME}" \
+  --template-file karpenter-cloudformation.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides "ClusterName=${CLUSTER_NAME}"
+```
+
+This bootstrap is important because installing only the Helm chart is **not enough** for an existing EKS cluster.
+
+## Step 3 — Tag Subnets and Security Groups
+
+Karpenter needs to discover where it can launch EC2 instances.
+
+Typical discovery tag:
+
+```text
+karpenter.sh/discovery = mycluster
+```
+
+Check VPC/subnets:
+
+```bash
+aws eks describe-cluster \
+  --name $CLUSTER_NAME \
+  --query "cluster.resourcesVpcConfig"
+```
+
+You can inspect subnet tags with:
+
+```bash
+aws ec2 describe-subnets \
+  --filters "Name=tag:karpenter.sh/discovery,Values=${CLUSTER_NAME}"
+```
+
+And security groups:
+
+```bash
+aws ec2 describe-security-groups \
+  --filters "Name=tag:karpenter.sh/discovery,Values=${CLUSTER_NAME}"
+```
+
+Your NodeClass can then discover these resources through the tag. ([Karpenter][4])
+
+## Step 4 — Install Karpenter Using Helm
+
+Karpenter is distributed through its OCI Helm chart. ([Karpenter][4])
+
+```bash
+helm registry logout public.ecr.aws
+```
+
+Install:
+
+```bash
+helm upgrade --install karpenter \
+  oci://public.ecr.aws/karpenter/karpenter \
+  --version "${KARPENTER_VERSION}" \
+  --namespace kube-system \
+  --create-namespace \
+  --set "settings.clusterName=${CLUSTER_NAME}" \
+  --wait
 ```
 
 Verify:
 
 ```bash
-kubectl get nodes
-kubectl get pods -A
+kubectl get pods -n kube-system | grep karpenter
 ```
 
-### 3. Important Karpenter Objects
-
-The two main resources to understand are:
-
-```text
-NodePool
-   |
-   v
-EC2NodeClass
-   |
-   v
-AWS EC2 Instance
-```
-
-**NodePool** defines Kubernetes-side requirements such as instance categories, architecture, capacity type, limits, and disruption behavior.
-
-**EC2NodeClass** defines AWS-specific configuration such as AMI family, IAM role, subnets, and security groups.
-
-### 4. Install Karpenter
-
-Karpenter installation requires AWS IAM permissions and EKS integration, so don't treat it as only a Helm installation.
-
-The official installation guide is the safest starting point because the Helm/chart version and required IAM configuration change between releases:
-
-[Karpenter Getting Started Guide](https://karpenter.sh/docs/getting-started/getting-started-with-karpenter/?utm_source=chatgpt.com)
-
-The installation itself uses the Karpenter OCI Helm chart in a pattern similar to:
+Check:
 
 ```bash
-helm upgrade --install karpenter \
-  oci://public.ecr.aws/karpenter/karpenter \
-  --namespace karpenter \
-  --create-namespace \
-  --version <KARPENTER_VERSION> \
-  ...
+kubectl get deployment karpenter -n kube-system
 ```
 
-After completing the IAM and Helm steps from the official guide:
+Logs:
 
 ```bash
-kubectl get pods -n karpenter
+kubectl logs \
+  -n kube-system \
+  -l app.kubernetes.io/name=karpenter \
+  -f
 ```
 
-Expected conceptually:
+## Step 5 — Create EC2NodeClass + NodePool
 
-```text
-NAME                         READY   STATUS
-karpenter-xxxxxxxxxx-xxxxx   1/1     Running
+Create:
+
+```bash
+nano karpenter.yaml
 ```
 
-### 5. Create an EC2NodeClass
-
-A simplified example:
+Basic example:
 
 ```yaml
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: default
-
 spec:
-  amiSelectorTerms:
-    - alias: al2023@latest
 
   role: "KarpenterNodeRole-mycluster"
+
+  amiSelectorTerms:
+    - alias: al2023@latest
 
   subnetSelectorTerms:
     - tags:
@@ -148,218 +270,363 @@ spec:
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: mycluster
-```
 
-Save:
-
-```bash
-nano ec2nodeclass.yaml
-```
-
-Apply:
-
-```bash
-kubectl apply -f ec2nodeclass.yaml
-```
-
-Check:
-
-```bash
-kubectl get ec2nodeclass
-```
-
-### 6. Create a NodePool
-
-Create:
-
-```bash
-nano nodepool.yaml
-```
-
-Example:
-
-```yaml
+---
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: default
 
 spec:
+
   template:
     spec:
+
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
         name: default
 
       requirements:
+
         - key: kubernetes.io/arch
           operator: In
           values:
             - amd64
+
+        - key: kubernetes.io/os
+          operator: In
+          values:
+            - linux
 
         - key: karpenter.sh/capacity-type
           operator: In
           values:
             - on-demand
 
-      expireAfter: 720h
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values:
+            - c
+            - m
+            - r
+
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values:
+            - "2"
 
   limits:
-    cpu: 20
+    cpu: 100
 
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m
 ```
 
+Replace:
+
+```text
+mycluster
+```
+
+with your actual cluster name. For a repeatable lab, pinning a tested AL2023 AMI alias/version is preferable to `@latest`; the current getting-started examples use a versioned AL2023 alias. ([Karpenter][4])
+
 Apply:
 
 ```bash
-kubectl apply -f nodepool.yaml
+kubectl apply -f karpenter.yaml
 ```
 
 Verify:
 
 ```bash
-kubectl get nodepool
+kubectl get nodepools
+
+kubectl get ec2nodeclasses
+
 kubectl describe nodepool default
+
+kubectl describe ec2nodeclass default
 ```
 
-### 7. Create Workload
+## Step 6 — Create Test Workload
 
-Now create enough Pods to require additional compute capacity.
+Create:
 
 ```bash
-kubectl create deployment nginx --image=nginx
+nano inflate.yaml
 ```
 
-Scale it:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inflate
+
+spec:
+  replicas: 0
+
+  selector:
+    matchLabels:
+      app: inflate
+
+  template:
+    metadata:
+      labels:
+        app: inflate
+
+    spec:
+      containers:
+
+        - name: inflate
+
+          image: public.ecr.aws/eks-distro/kubernetes/pause:3.10
+
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+```
+
+Apply:
 
 ```bash
-kubectl scale deployment nginx --replicas=10
+kubectl apply -f inflate.yaml
 ```
 
-Watch Pods:
+Check:
 
 ```bash
-kubectl get pods -w
+kubectl get deployment inflate
 ```
 
-In another terminal:
-
-```bash
-kubectl get nodes -w
-```
-
-The important behavior to observe is:
-
-```text
-10 Pods requested
-      ↓
-Existing nodes lack capacity
-      ↓
-Pods become Pending
-      ↓
-Karpenter detects scheduling requirements
-      ↓
-EC2 capacity launched
-      ↓
-Node joins EKS
-      ↓
-Pending Pods scheduled
-```
-
-### 8. Check Karpenter
-
-Check NodePools:
-
-```bash
-kubectl get nodepool
-```
-
-Check NodeClaims:
-
-```bash
-kubectl get nodeclaims
-```
-
-Check nodes:
+## Step 7 — Check Nodes Before Scaling
 
 ```bash
 kubectl get nodes
 ```
 
-Check which node each Pod is running on:
+For more information:
 
 ```bash
-kubectl get pods -o wide
+kubectl get nodes -o wide
 ```
 
-Karpenter logs are also very useful:
+Keep this running:
 
 ```bash
-kubectl logs -n karpenter \
-  -l app.kubernetes.io/name=karpenter \
-  --tail=100
+kubectl get nodes -w
 ```
 
-### 9. Test Scale Down
+## Step 8 — Generate Demand
 
-Now remove the workload:
+Scale:
 
 ```bash
-kubectl scale deployment nginx --replicas=0
+kubectl scale deployment inflate --replicas=10
 ```
 
 Watch:
 
 ```bash
-kubectl get nodes -w
+kubectl get pods -w
 ```
 
-With consolidation configured correctly, Karpenter can identify unnecessary capacity and terminate the nodes it provisioned.
-
-### 10. Points to Remember
-
-```text
-HPA
- ↓
-Scales Pods
-
-Karpenter
- ↓
-Scales Nodes
-```
-
-So a common production flow is:
-
-```text
-Traffic increases
-      ↓
-HPA increases Pods
-      ↓
-Not enough node capacity
-      ↓
-Pods Pending
-      ↓
-Karpenter detects Pods
-      ↓
-EC2 capacity provisioned
-      ↓
-Pods scheduled
-```
-
-For a **first classroom demo**, focus on only four commands:
+Check pending Pods:
 
 ```bash
-kubectl get pods -w
+kubectl get pods \
+  --field-selector=status.phase=Pending
+```
 
+If existing nodes don't have sufficient capacity, some Pods should become Pending.
+
+## Step 9 — Watch Karpenter
+
+New terminal:
+
+```bash
+kubectl get nodeclaims -w
+```
+
+Another terminal:
+
+```bash
 kubectl get nodes -w
+```
 
-kubectl get nodepool
+Karpenter logs:
 
+```bash
+kubectl logs \
+  -n kube-system \
+  -l app.kubernetes.io/name=karpenter \
+  -f
+```
+
+Expected flow:
+
+```text
+10 Pods requested
+      |
+      v
+Existing Nodes
+      |
+      v
+Insufficient CPU/RAM
+      |
+      v
+Pending Pods
+      |
+      v
+Karpenter
+      |
+      v
+NodePool
+      |
+      v
+EC2NodeClass
+      |
+      v
+NodeClaim
+      |
+      v
+EC2 Instance
+      |
+      v
+New Kubernetes Node
+      |
+      v
+Pods Running
+```
+
+Check:
+
+```bash
 kubectl get nodeclaims
 ```
 
-The key takeaway for students is: **Karpenter doesn't primarily scale a predefined node group. It responds to Pod scheduling requirements and provisions appropriate EC2 capacity for those workloads.**
+```bash
+kubectl get nodes
+```
+
+```bash
+kubectl get pods -o wide
+```
+
+You should be able to see which Pods were placed on the Karpenter-created node.
+
+## Step 10 — Scale Down
+
+```bash
+kubectl scale deployment inflate --replicas=0
+```
+
+Check:
+
+```bash
+kubectl get pods
+```
+
+Watch nodes:
+
+```bash
+kubectl get nodes -w
+```
+
+Because the example NodePool uses:
+
+```yaml
+disruption:
+  consolidationPolicy: WhenEmptyOrUnderutilized
+  consolidateAfter: 1m
+```
+
+Karpenter can consolidate unnecessary capacity after the workload disappears. ([Karpenter][4])
+
+## Step 11 — Useful Commands
+
+```bash
+# Karpenter
+kubectl get pods -n kube-system | grep karpenter
+
+# NodePool
+kubectl get nodepools
+
+# EC2NodeClass
+kubectl get ec2nodeclasses
+
+# NodeClaims
+kubectl get nodeclaims
+
+# Nodes
+kubectl get nodes
+
+# Detailed nodes
+kubectl get nodes -o wide
+
+# Pods
+kubectl get pods -o wide
+
+# Pending pods
+kubectl get pods --field-selector=status.phase=Pending
+
+# Describe NodePool
+kubectl describe nodepool default
+
+# Describe NodeClass
+kubectl describe ec2nodeclass default
+
+# Describe NodeClaim
+kubectl describe nodeclaim
+
+# Karpenter logs
+kubectl logs \
+  -n kube-system \
+  -l app.kubernetes.io/name=karpenter \
+  -f
+```
+
+## Basic Practice Summary
+
+```text
+STEP 1  → Verify existing EKS
+STEP 2  → Configure Karpenter AWS/IAM prerequisites
+STEP 3  → Configure subnet/security-group discovery
+STEP 4  → Install Karpenter with Helm
+STEP 5  → Create EC2NodeClass
+STEP 6  → Create NodePool
+STEP 7  → Deploy test workload
+STEP 8  → Scale workload to 10 Pods
+STEP 9  → Observe Pending Pods
+STEP 10 → Watch NodeClaim
+STEP 11 → Watch new EC2/Kubernetes Node
+STEP 12 → Verify Pods become Running
+STEP 13 → Scale workload to 0
+STEP 14 → Observe Karpenter consolidation
+```
+
+**Most important concept for the lab:**
+
+```text
+Pod Autoscaling                         Node Autoscaling
+
+HPA / KEDA                             Karpenter
+     |                                     |
+     v                                     v
+More Pods --------------------------> Pending Pods
+                                          |
+                                          v
+                                      Karpenter
+                                          |
+                                          v
+                                     More EC2 Nodes
+```
+
+[Karpenter official documentation](https://karpenter.sh/docs/?utm_source=chatgpt.com)
+
+[1]: https://karpenter.sh/docs/?utm_source=chatgpt.com "Documentation | Karpenter"
+[2]: https://karpenter.sh/docs/concepts/nodepools/?utm_source=chatgpt.com "NodePools | Karpenter"
+[3]: https://karpenter.sh/docs/reference/cloudformation/?utm_source=chatgpt.com "CloudFormation | Karpenter"
+[4]: https://karpenter.sh/v1.12/getting-started/getting-started-with-karpenter/?utm_source=chatgpt.com "Getting Started with Karpenter | Karpenter"
