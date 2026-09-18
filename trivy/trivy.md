@@ -1,4 +1,4 @@
-## Trivy — Basic Practice Lab
+## Trivy Lab
 
 [Trivy](https://trivy.dev/?utm_source=chatgpt.com) is an open-source security scanner commonly used with Docker, Kubernetes, CI/CD, and Infrastructure as Code. For a basic lab, focus on **container image scanning, filesystem scanning, and Kubernetes scanning**.
 
