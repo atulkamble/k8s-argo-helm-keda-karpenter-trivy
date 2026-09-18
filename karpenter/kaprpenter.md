@@ -1,4 +1,4 @@
-# Karpenter Basic Practice – Existing EKS Cluster
+# Karpenter Practice
 
 ## 1. What is Karpenter?
 
