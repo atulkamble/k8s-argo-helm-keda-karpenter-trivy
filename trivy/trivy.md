@@ -1,36 +1,45 @@
-## Trivy — Very Basic Practice Lab
+## Trivy — Basic Practice Lab
 
-[Trivy](https://trivy.dev/?utm_source=chatgpt.com) is an open-source security scanner from Aqua Security. For a beginner lab, focus on **container image scanning** and **filesystem/project scanning**. Trivy can scan for vulnerabilities, misconfigurations, secrets, and other security issues. ([Trivy][1])
+[Trivy](https://trivy.dev/?utm_source=chatgpt.com) is an open-source security scanner commonly used with Docker, Kubernetes, CI/CD, and Infrastructure as Code. For a basic lab, focus on **container image scanning, filesystem scanning, and Kubernetes scanning**.
 
-### 1. Architecture
+### 1. Points to Remember
+
+* **Trivy = Security Scanner**
+* Developed as part of the Aqua Security ecosystem.
+* Finds **CVEs/vulnerabilities**, **misconfigurations**, **secrets**, and some **license issues**.
+* Can scan:
+
+  * Container images
+  * Local files/directories
+  * Git repositories
+  * Kubernetes
+  * IaC such as Terraform/Kubernetes manifests
+* Commonly integrated into CI/CD pipelines to catch issues before deployment.
+* Trivy uses vulnerability databases that are downloaded/updated automatically.
+
+### 2. Architecture
 
 ```text
 Developer
-   |
-   v
+    |
+    v
 Application Code
-   |
-   v
-Docker Build
-   |
-   v
-Docker Image
-   |
-   v
-+-------------+
-|    Trivy    |
-| Security    |
-|   Scan      |
-+-------------+
-   |
-   v
-Vulnerabilities
-CRITICAL / HIGH / MEDIUM / LOW
+    |
+    +----------------------+
+    |        TRIVY         |
+    +----------------------+
+       |       |       |
+       v       v       v
+     Image    Files    K8s
+       |       |       |
+       +-------+-------+
+               |
+               v
+     Vulnerability /
+     Security Report
 ```
 
-### 2. Install Trivy
-
-For **macOS**:
+### 3. Install Trivy on macOS
 
 ```bash
 brew install trivy
@@ -42,219 +51,301 @@ Verify:
 trivy --version
 ```
 
-Homebrew is an officially documented installation method for macOS/Linux. ([Trivy][2])
-
-### 3. First Practice — Scan an Existing Docker Image
-
-Make sure Docker Desktop is running.
+Update vulnerability database manually if required:
 
 ```bash
-docker pull nginx
+trivy image --download-db-only
 ```
 
-Check:
+---
+
+## 4. Practice 1 — Scan a Docker Image
+
+Pull an image:
 
 ```bash
-docker images
-```
-
-Now scan:
-
-```bash
-trivy image nginx
-```
-
-Basic flow:
-
-```text
-Docker Hub
-    |
-    v
-nginx image
-    |
-    v
-  Trivy
-    |
-    v
-Vulnerability Report
-```
-
-Look at these fields in the output:
-
-```text
-Library
-Vulnerability
-Severity
-Installed Version
-Fixed Version
-```
-
-### 4. Show Only HIGH and CRITICAL
-
-Instead of looking through every vulnerability:
-
-```bash
-trivy image --severity HIGH,CRITICAL nginx
-```
-
-This is much easier to demonstrate to students because you can focus on the important findings.
-
-### 5. Scan Your Own Application
-
-Example:
-
-```bash
-git clone https://github.com/atulkamble/FlaskApp-ACR-ACI.git
-cd FlaskApp-ACR-ACI
-```
-
-Build the image:
-
-```bash
-docker build -t flaskapp:v1 .
-```
-
-Check:
-
-```bash
-docker images
+docker pull nginx:latest
 ```
 
 Scan:
 
 ```bash
-trivy image flaskapp:v1
+trivy image nginx:latest
+```
+
+Trivy reports vulnerabilities with severity levels such as:
+
+```text
+UNKNOWN
+LOW
+MEDIUM
+HIGH
+CRITICAL
+```
+
+Show only HIGH and CRITICAL:
+
+```bash
+trivy image --severity HIGH,CRITICAL nginx:latest
+```
+
+Ignore vulnerabilities without an available fix:
+
+```bash
+trivy image --ignore-unfixed nginx:latest
+```
+
+---
+
+## 5. Practice 2 — Scan Your Own Docker Image
+
+Suppose your application contains:
+
+```text
+myapp/
+├── app.py
+├── requirements.txt
+└── Dockerfile
+```
+
+Build:
+
+```bash
+cd myapp
+
+docker build -t myapp:v1 .
+```
+
+Scan:
+
+```bash
+trivy image myapp:v1
 ```
 
 Only important vulnerabilities:
 
 ```bash
-trivy image --severity HIGH,CRITICAL flaskapp:v1
+trivy image \
+  --severity HIGH,CRITICAL \
+  myapp:v1
 ```
 
-### 6. Scan Source Code / Project Directory
+---
 
-Trivy also supports scanning a local filesystem/project. The basic syntax is `trivy fs PATH`. ([Trivy][3])
+## 6. Practice 3 — Filesystem Scan
 
-Inside the project:
+Scan the current project:
 
 ```bash
 trivy fs .
 ```
 
-Or:
+Scan vulnerabilities:
 
 ```bash
-trivy filesystem .
+trivy fs --scanners vuln .
 ```
 
-This is useful **before building the Docker image**.
+Scan for exposed secrets:
+
+```bash
+trivy fs --scanners secret .
+```
+
+Scan both:
+
+```bash
+trivy fs --scanners vuln,secret .
+```
+
+This is useful **before creating the Docker image**.
 
 ```text
 Source Code
     |
-    +---- trivy fs .
+    | trivy fs .
+    v
+Security Check
     |
     v
-Docker Build
-    |
-    v
-Docker Image
-    |
-    +---- trivy image flaskapp:v1
+docker build
 ```
 
-### 7. Simple DevSecOps Workflow
+---
 
-The key idea for students is:
+## 7. Practice 4 — Scan Kubernetes YAML
+
+Create:
+
+```bash
+nano deployment.yaml
+```
+
+Example:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+```
+
+Scan the manifest:
+
+```bash
+trivy config deployment.yaml
+```
+
+Or scan manifests in the current directory:
+
+```bash
+trivy config .
+```
+
+This checks for Kubernetes/IaC **misconfigurations** rather than just CVEs.
+
+---
+
+## 8. Practice 5 — Scan Kubernetes Cluster
+
+Make sure the cluster is accessible:
+
+```bash
+kubectl get nodes
+```
+
+Then:
+
+```bash
+trivy k8s --report summary cluster
+```
+
+For a more comprehensive cluster scan:
+
+```bash
+trivy k8s --report all cluster
+```
+
+Scan a namespace:
+
+```bash
+trivy k8s --namespace default all
+```
+
+---
+
+## 9. Save Report to File
+
+Table format:
+
+```bash
+trivy image nginx:latest > trivy-report.txt
+```
+
+JSON:
+
+```bash
+trivy image \
+  --format json \
+  --output trivy-report.json \
+  nginx:latest
+```
+
+SARIF:
+
+```bash
+trivy image \
+  --format sarif \
+  --output trivy-report.sarif \
+  nginx:latest
+```
+
+---
+
+## 10. Basic DevSecOps Flow
 
 ```text
 Developer
    |
    v
-GitHub
-   |
-   v
 Source Code
    |
-   +----> Trivy FS Scan
+   |----> trivy fs .
    |
    v
 Docker Build
    |
    v
-Docker Image
+Container Image
    |
-   +----> Trivy Image Scan
+   |----> trivy image myapp:v1
    |
    v
 Container Registry
    |
    v
-Kubernetes / EKS
+Kubernetes
+   |
+   |----> trivy config .
+   |----> trivy k8s ...
+   |
+   v
+Application
 ```
 
-**Trivy introduces security scanning before deployment.**
-
-### 8. Commands to Remember
+### Commands to Remember
 
 ```bash
-# Check installation
+# Version
 trivy --version
 
-# Scan public/local container image
-trivy image nginx
+# Image scanning
+trivy image nginx:latest
 
-# HIGH and CRITICAL only
-trivy image --severity HIGH,CRITICAL nginx
+# Important vulnerabilities only
+trivy image --severity HIGH,CRITICAL nginx:latest
 
-# Scan project
+# Ignore vulnerabilities without fixes
+trivy image --ignore-unfixed nginx:latest
+
+# Filesystem
 trivy fs .
 
-# Build your application
-docker build -t flaskapp:v1 .
+# Secrets
+trivy fs --scanners secret .
 
-# Scan your application image
-trivy image flaskapp:v1
+# Kubernetes/IaC manifest
+trivy config deployment.yaml
 
-# Important findings only
-trivy image --severity HIGH,CRITICAL flaskapp:v1
+# Kubernetes cluster
+trivy k8s --report summary cluster
+
+# Save JSON report
+trivy image --format json --output report.json nginx:latest
 ```
 
-### Basic 10–15 Minute Student Demo
-
-Use this exact sequence:
+For a **very basic classroom demo**, the four commands worth demonstrating are:
 
 ```bash
-brew install trivy
-
-trivy --version
-
-docker pull nginx
-
-docker images
-
-trivy image nginx
-
-trivy image --severity HIGH,CRITICAL nginx
-
-git clone https://github.com/atulkamble/FlaskApp-ACR-ACI.git
-
-cd FlaskApp-ACR-ACI
-
+trivy image nginx:latest
+trivy image --severity HIGH,CRITICAL nginx:latest
 trivy fs .
-
-docker build -t flaskapp:v1 .
-
-trivy image flaskapp:v1
-
-trivy image --severity HIGH,CRITICAL flaskapp:v1
+trivy config deployment.yaml
 ```
 
-**Points to remember:** `trivy fs .` scans the project/filesystem, while `trivy image <image>` scans a container image. In a CI/CD pipeline, you can use the scan as a security gate before pushing or deploying an image. ([Trivy][3])
-
-[Official Trivy documentation](https://trivy.dev/docs/?utm_source=chatgpt.com)
-
-[1]: https://trivy.dev/docs/dev/getting-started/?utm_source=chatgpt.com "First steps - Trivy"
-[2]: https://www.trivy.dev/docs/latest/getting-started/installation/?utm_source=chatgpt.com "Installation - Trivy"
-[3]: https://www.trivy.dev/docs/latest/guide/references/configuration/cli/trivy_filesystem/?utm_source=chatgpt.com "Filesystem - Trivy"
+These clearly demonstrate the progression **Image → Vulnerabilities, Source → Security Issues, Kubernetes YAML → Misconfigurations**.
