@@ -1,26 +1,20 @@
 apiVersion: apps/v1
-kind: Deployment
-
+kind: ReplicaSet
 metadata:
-  name: mydeployment
+  name: myreplicaset
   labels:
     app: myapp
-
+    key: value
 spec:
-  replicas: 6
-
+  replicas: 2
   selector:
     matchLabels:
-      app: myapp
-
+      key: value
   template:
     metadata:
       labels:
-        app: myapp
-
+        key: value
     spec:
       containers:
-        - name: mycontainer
+        - name: myapp
           image: docker.io/atuljkamble/storefront:latest
-          ports:
-            - containerPort: 3000
