@@ -287,3 +287,83 @@ trivy fs .
 
 trivy config deployment.yaml
 ```
+# 27-11-26
+
+```
+
+
+
+
+kubectl get nodes 
+kubectl get ns 
+kubectl get pods 
+kubectl get svc 
+
+// helm 
+
+brew install helm 
+
+
+// signup for artifacts hub website - sign up with github 
+
+// Helm Charts
+
+eksctl create cluster --name mycluster --region us-east-1 --nodegroup-name mynodes --node-type t3.medium --nodes 2 --nodes-min 2 --nodes-max 2 --managed
+
+aws eks update-kubeconfig --name mycluster --region us-east-1
+
+choco install kubernetes-helm
+helm --version
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm install my-nginx bitnami/nginx --version 25.2.19
+kubectl get pods 
+kubectl get svc
+helm uninstall my-nginx bitnami/nginx
+
+
+helm pull oci://registry-1.docker.io/bitnamicharts/nginx --version 25.2.19
+
+ 
+helm repo add jenkinsci https://charts.jenkins.io/
+helm install my-jenkins jenkinsci/jenkins --version 5.13.9
+
+
+
+
+// WSL 
+
+https://trivy.dev/docs/latest/getting-started/installation/#__tabbed_2_1
+
+sudo apt-get install wget gnupg
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update
+sudo apt-get install trivy
+
+brew install trivy
+trivy --version 
+
+touch helloworld.py
+
+trivy fs .
+
+trivy image python:3.4-alpine
+trivy image --input ruby-3.1.tar
+trivy server
+
+// https://karpenter.sh/
+
+resource utilization
+resource optimization 
+
+// Argo-CD 
+
+
+// KEDA 
+
+helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+helm upgrade --install keda kedacore/keda -n keda --create-namespace --wait
+
+kubectl top nodes
+```
