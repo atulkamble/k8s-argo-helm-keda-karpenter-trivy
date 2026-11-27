@@ -1,20 +1,20 @@
-# Trivy: scan an image
+# Trivy
 
-Trivy runs locally, so this lesson needs commands rather than a Kubernetes manifest.
-Install the Trivy CLI, then run from the repository root:
-
-```bash
-trivy image nginx:latest
-trivy image --severity HIGH,CRITICAL nginx:latest
-```
-
-Read the package name, severity, installed version, and fixed version in the
-results. Scan the same image tag that you deploy in the Helm chart.
-
-Optional: return a failure status when HIGH or CRITICAL vulnerabilities exist:
+Trivy compares packages in the image with its vulnerability database. Run from the repository root with access to the image registry and database. The command extracts the image from the rendered chart, so the scan follows changes to the chart defaults.
 
 ```bash
-trivy image --severity HIGH,CRITICAL --exit-code 1 nginx:latest
+IMAGE="$(helm template webapp ./helm/webapp --show-only templates/deployment.yaml | awk -F '"' '/^[[:space:]]+image: "/ {print $2}')"
+test -n "$IMAGE" && trivy image --scanners vuln --severity HIGH,CRITICAL "$IMAGE"
 ```
 
-The scan needs registry access and Trivy's vulnerability database.
+Read the CVE ID, package, installed version, severity and fixed version when available. The report can change as the database is updated.
+
+## Optional CI gate
+
+```bash
+test -n "$IMAGE" && trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$IMAGE"
+```
+
+With `--exit-code 1`, findings at the selected severities cause a nonzero exit. Read the output to distinguish findings from scan errors. Then continue with the [Helm lesson](../helm/README.md).
+
+[Trivy exit-code documentation](https://trivy.dev/docs/latest/configuration/others/)
