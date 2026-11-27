@@ -1,14 +1,18 @@
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: demo
+  name: classroom-demo
 spec:
   template:
     spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: demo
+        name: classroom-demo
+      taints:
+        - key: classroom-capacity
+          value: dedicated
+          effect: NoSchedule
       requirements:
         - key: kubernetes.io/arch
           operator: In
