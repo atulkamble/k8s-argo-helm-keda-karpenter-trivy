@@ -2,10 +2,10 @@ replicaCount: 1
 
 image:
   repository: nginx
-  tag: latest
+  tag: "1.30.0"
 
 service:
-  type: LoadBalancer
+  type: ClusterIP
   port: 80
 
 # Required for KEDA's CPU utilization trigger.
