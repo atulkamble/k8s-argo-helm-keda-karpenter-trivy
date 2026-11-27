@@ -10,7 +10,7 @@ spec:
     - group: apps
       kind: Deployment
       name: webapp
-      namespace: default
+      namespace: webapp-lab
       jsonPointers:
         - /spec/replicas
   syncPolicy:
